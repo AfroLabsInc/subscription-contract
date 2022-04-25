@@ -5,7 +5,7 @@
     "test": "npx hardhat test",
     "test:rinkeby": "npx hardhat test --network rinkeby",
     "verify:gates": "npx hardhat run scripts/verify.js --network rinkeby",
-    "commit": "git add . && cz && git push"
+    "commit": "cz"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.5",
