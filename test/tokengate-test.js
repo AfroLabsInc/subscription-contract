@@ -5,9 +5,9 @@ const { ethers, upgrades } = require("hardhat");
 const ContractObj = {
   TokenGate: null,
   proxyAddress: "0xF838415B7D3607682F2BeA1A479523A16e0cEd35",
-  testToken721: null,
-  testToken1155: null,
-  testToken20: null,
+  testToken721: "",
+  testToken1155: "",
+  testToken20: "",
 };
 const initialize = async () => {
   ContractObj.TokenGate = await ethers.getContractFactory("TokenGate");
@@ -73,6 +73,18 @@ describe("TokenGate", function () {
       )
     ).to.be.true;
   });
+  it("Deployer is a TOKEN MODERATOR", async function () {
+    const TokenGateContract = await ContractObj.TokenGate.attach(
+      ContractObj.proxyAddress
+    );
+    const [owner] = await ethers.getSigners();
+    expect(
+      await TokenGateContract.hasRole(
+        ethers.utils.formatBytes32String("TOKEN_MODERATORS"),
+        owner.address
+      )
+    ).to.be.true;
+  });
 
   it("Should return false, user does not own access token or subscribed (ERC721, ERC20 and ERC1155)  ", async function () {
     const TokenGateContract = await ContractObj.TokenGate.attach(
@@ -98,6 +110,7 @@ describe("TokenGate", function () {
       )
     ).to.be.false;
   });
+
   it("Add Access token (ERC721)", async function () {
     const TokenGateContract = await ContractObj.TokenGate.attach(
       ContractObj.proxyAddress
@@ -193,50 +206,7 @@ describe("TokenGate", function () {
       )
     ).to.be.true;
   });
-  it("Disable Test Tokens (ERC721, ERC20 and ERC1155) from access tokens", async function () {
-    const TokenGateContract = await ContractObj.TokenGate.attach(
-      ContractObj.proxyAddress
-    );
 
-    await expect(TokenGateContract.disableTokenAccess(ContractObj.testToken721))
-      .to.emit(TokenGateContract, "DisableTokenAccess")
-      .withArgs(ContractObj.testToken721);
-    await expect(
-      TokenGateContract.disableTokenAccess(ContractObj.testToken1155)
-    )
-      .to.emit(TokenGateContract, "DisableTokenAccess")
-      .withArgs(ContractObj.testToken1155);
-    await expect(TokenGateContract.disableTokenAccess(ContractObj.testToken20))
-      .to.emit(TokenGateContract, "DisableTokenAccess")
-      .withArgs(ContractObj.testToken20);
-  });
-  it("Checking Access for TestTokens (ERC721, ERC20 and ERC1155) should return false, no access token initialized and user is not subscribed", async function () {
-    const TokenGateContract = await ContractObj.TokenGate.attach(
-      ContractObj.proxyAddress
-    );
-
-    const [owner] = await ethers.getSigners();
-    // console.log(owner.address);
-    expect(
-      await TokenGateContract.checkAccess(
-        ContractObj.testToken721,
-        owner.address
-      )
-    ).to.be.false;
-    expect(
-      await TokenGateContract.checkAccess(
-        ContractObj.testToken20,
-        owner.address
-      )
-    ).to.be.false;
-    expect(
-      await TokenGateContract.checkAccess(
-        ContractObj.testToken1155,
-        owner.address
-      )
-    ).to.be.false;
-    // expect(TokenGateContract.setFee);
-  });
   /** Subscription **/
   it("Set Subscription Fee for  users without TestToken (ERC721) token", async function () {
     const TokenGateContract = await ContractObj.TokenGate.attach(
@@ -298,7 +268,7 @@ describe("TokenGate", function () {
         "604800"
       );
   });
-  it("Insteaf of acquiring TestTokens (ERC721), User can Subscribe by paying the Fee", async function () {
+  it("Instead of acquiring TestTokens (ERC721), User can Subscribe periodically by paying the Fee", async function () {
     const TokenGateContract = await ContractObj.TokenGate.attach(
       ContractObj.proxyAddress
     );
@@ -312,6 +282,22 @@ describe("TokenGate", function () {
     const options = { value: ethers.utils.parseEther(fee) };
     await expect(
       TokenGateContract.subscribe(ContractObj.testToken721, options)
+    ).to.emit(TokenGateContract, "Subscribed");
+  });
+  it("Instead of acquiring TestTokens (ERC11155), User can Subscribe periodically by paying the Fee", async function () {
+    const TokenGateContract = await ContractObj.TokenGate.attach(
+      ContractObj.proxyAddress
+    );
+
+    // const [owner] = await ethers.getSigners();
+    // expect(await TokenGateContract.checkIfSubscribed(owner.address)).to.be.false;
+    let fee = await TokenGateContract.getFeeForTokenAccess(
+      ContractObj.testToken1155
+    );
+    fee = ethers.utils.formatEther(fee.price);
+    const options = { value: ethers.utils.parseEther(fee) };
+    await expect(
+      TokenGateContract.subscribe(ContractObj.testToken1155, options)
     ).to.emit(TokenGateContract, "Subscribed");
   });
   it("Checking Access for TestToken (ERC721) should return true, user paid for subscription,", async function () {
@@ -329,15 +315,78 @@ describe("TokenGate", function () {
     ).to.be.true;
     // expect(TokenGateContract.setFee);
   });
-  it("Withdraw ETH from contract", async function () {
+  it("Disable Test Tokens (ERC721, ERC20 and ERC1155) from access tokens", async function () {
+    const TokenGateContract = await ContractObj.TokenGate.attach(
+      ContractObj.proxyAddress
+    );
+    const [owner] = await ethers.getSigners();
+    await expect(TokenGateContract.disableTokenAccess(ContractObj.testToken721))
+      .to.emit(TokenGateContract, "DisableTokenAccess")
+      .withArgs(ContractObj.testToken721, owner.address);
+    await expect(
+      TokenGateContract.disableTokenAccess(ContractObj.testToken1155)
+    )
+      .to.emit(TokenGateContract, "DisableTokenAccess")
+      .withArgs(ContractObj.testToken1155, owner.address);
+    await expect(TokenGateContract.disableTokenAccess(ContractObj.testToken20))
+      .to.emit(TokenGateContract, "DisableTokenAccess")
+      .withArgs(ContractObj.testToken20, owner.address);
+  });
+  it("Disable Tokens: Checking Access for TestTokens (ERC721, ERC20 and ERC1155) should return false, no access token initialized and user is not subscribed", async function () {
     const TokenGateContract = await ContractObj.TokenGate.attach(
       ContractObj.proxyAddress
     );
 
     const [owner] = await ethers.getSigners();
-    const balance = await ethers.provider.getBalance(TokenGateContract.address);
-    await expect(TokenGateContract.withrawETH())
-      .to.emit(TokenGateContract, "WithdrawBalance")
-      .withArgs(balance.toString(), owner.address.toString());
+    // console.log(owner.address);
+    expect(
+      await TokenGateContract.checkAccess(
+        ContractObj.testToken721,
+        owner.address
+      )
+    ).to.be.false;
+    expect(
+      await TokenGateContract.checkAccess(
+        ContractObj.testToken20,
+        owner.address
+      )
+    ).to.be.false;
+    expect(
+      await TokenGateContract.checkAccess(
+        ContractObj.testToken1155,
+        owner.address
+      )
+    ).to.be.false;
+    // expect(TokenGateContract.setFee);
+  });
+  it("Withdraw ETH paid for Test-Token721", async function () {
+    const TokenGateContract = await ContractObj.TokenGate.attach(
+      ContractObj.proxyAddress
+    );
+
+    const [owner] = await ethers.getSigners();
+    const balance = await TokenGateContract.ethBalancePaidForTokenAccess(
+      ContractObj.testToken721
+    );
+    await expect(
+      TokenGateContract.withdrawBalancePaidForToken(ContractObj.testToken721)
+    )
+      .to.emit(TokenGateContract, "WithdrawBalancePaidForToken")
+      .withArgs(ContractObj.testToken721, balance.toString(), owner.address);
+  });
+  it("Withdraw ETH paid for Test-Token1155", async function () {
+    const TokenGateContract = await ContractObj.TokenGate.attach(
+      ContractObj.proxyAddress
+    );
+
+    const [owner] = await ethers.getSigners();
+    const balance = await TokenGateContract.ethBalancePaidForTokenAccess(
+      ContractObj.testToken1155
+    );
+    await expect(
+      TokenGateContract.withdrawBalancePaidForToken(ContractObj.testToken1155)
+    )
+      .to.emit(TokenGateContract, "WithdrawBalancePaidForToken")
+      .withArgs(ContractObj.testToken1155, balance.toString(), owner.address);
   });
 });
